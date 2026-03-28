@@ -49,7 +49,7 @@ def process_files(uploaded_files):
                         all_data['guests'].append(df)
                     elif 'المسؤول' in cols and 'الصفة' in cols:
                         all_data['officials'].append(df)
-                    elif 'الساعة' in cols and 'العدد' in cols: # معالجة جداول الساعات إن وجدت
+                    elif 'الساعة' in cols and 'العدد' in cols:
                         df['العدد'] = pd.to_numeric(df['العدد'], errors='coerce').fillna(0)
                         if 'التصنيف' in cols:
                             all_data['hourly'].append(df[['التقرير', 'الساعة', 'التصنيف', 'العدد']])
@@ -100,4 +100,135 @@ else:
         # فلترة البيانات لليوم المختار
         d_p = df_p[df_p['التقرير'] == selected_report] if not df_p.empty else pd.DataFrame()
         d_c = df_c[df_c['التقرير'] == selected_report] if not df_c.empty else pd.DataFrame()
-        d_r = df_r[df_r['التقرير'] == selected_report] if not df
+        d_r = df_r[df_r['التقرير'] == selected_report] if not df_r.empty else pd.DataFrame()
+        d_g = df_g[df_g['التقرير'] == selected_report] if not df_g.empty else pd.DataFrame()
+        d_o = df_o[df_o['التقرير'] == selected_report] if not df_o.empty else pd.DataFrame()
+        d_h = df_h[df_h['التقرير'] == selected_report] if not df_h.empty else pd.DataFrame()
+
+        st.markdown("---")
+        # 1. بطاقات المؤشرات (Dashboard Cards)
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("إجمالي المواد", f"{int(d_p['العدد'].sum()) if not d_p.empty else 0}")
+        c2.metric("عدد المراسلين", f"{len(d_r['المراسل/الصحفي'].unique()) if not d_r.empty else 0}")
+        c3.metric("إجمالي الضيوف", f"{len(d_g) if not d_g.empty else 0}")
+        c4.metric("تصريحات المسؤولين", f"{len(d_o) if not d_o.empty else 0}")
+
+        st.markdown("---")
+        col_a, col_b = st.columns(2)
+        # 2. رسم دائري: شكل التقديم
+        with col_a:
+            st.markdown("#### 🍩 توزيع المواد (شكل التقديم)")
+            if not d_p.empty:
+                fig_p = px.pie(d_p, values='العدد', names='شكل التقديم', hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
+                st.plotly_chart(fig_p, use_container_width=True)
+        # 3. رسم دائري: سياسة واقتصاد
+        with col_b:
+            st.markdown("#### 🌍 التصنيف الموضوعي (سياسة/اقتصاد)")
+            if not d_c.empty:
+                fig_c = px.pie(d_c, values='العدد', names='التصنيف', hole=0.4, color_discrete_map={'سياسة': '#ef553b', 'اقتصاد': '#00cc96'})
+                st.plotly_chart(fig_c, use_container_width=True)
+
+        # 4 & 5. رسوم الساعات (إذا توفرت)
+        if not d_h.empty:
+            st.markdown("---")
+            st.markdown("#### ⏰ توزيع كثافة المواد على ساعات البث")
+            if 'التصنيف' in d_h.columns:
+                fig_h = px.bar(d_h, x='الساعة', y='العدد', color='التصنيف', barmode='group')
+            else:
+                fig_h = px.bar(d_h, x='الساعة', y='العدد')
+            st.plotly_chart(fig_h, use_container_width=True)
+
+        st.markdown("---")
+        col_c, col_d = st.columns(2)
+        # 6. رسم أفقي: المراسلين
+        with col_c:
+            st.markdown("#### 🎙️ نشاط المراسلين (ترتيب تنازلي)")
+            if not d_r.empty:
+                top_r = d_r.groupby('المراسل/الصحفي')['عدد المداخلات'].sum().reset_index().sort_values('عدد المداخلات', ascending=True)
+                fig_r = px.bar(top_r, x='عدد المداخلات', y='المراسل/الصحفي', orientation='h', text='عدد المداخلات', color_discrete_sequence=['#1976d2'])
+                fig_r.update_layout(xaxis_title="", yaxis_title="")
+                st.plotly_chart(fig_r, use_container_width=True)
+        
+        # 7. رسم أفقي: الضيوف
+        with col_d:
+            st.markdown("#### 👤 أبرز الضيوف تكراراً")
+            if not d_g.empty:
+                top_g = d_g.groupby('الضيف').size().reset_index(name='الظهور').sort_values('الظهور', ascending=True).tail(10)
+                fig_g = px.bar(top_g, x='الظهور', y='الضيف', orientation='h', text='الظهور', color_discrete_sequence=['#00cc96'])
+                fig_g.update_layout(xaxis_title="", yaxis_title="")
+                st.plotly_chart(fig_g, use_container_width=True)
+
+    # ----------------------------------------------------------------------
+    # التبويب الثاني: مقارنة الأمس واليوم
+    # ----------------------------------------------------------------------
+    with tab2:
+        if len(report_names) < 2:
+            st.info("⚠️ لا تتوفر بيانات كافية للمقارنة. يرجى رفع ملفين على الأقل (مثلاً: تقرير اليوم وتقرير الأمس).")
+        else:
+            st.markdown("### ⚖️ لوحة المقارنة والتغيرات")
+            cc1, cc2 = st.columns(2)
+            today_rep = cc1.selectbox("اختر تقرير (اليوم):", report_names, index=0)
+            yest_rep = cc2.selectbox("اختر تقرير (الأمس):", report_names, index=1 if len(report_names)>1 else 0)
+            
+            # حساب المجاميع لليوم والأمس
+            t_p = df_p[df_p['التقرير'] == today_rep]['العدد'].sum() if not df_p.empty else 0
+            y_p = df_p[df_p['التقرير'] == yest_rep]['العدد'].sum() if not df_p.empty else 0
+            
+            t_r = len(df_r[df_r['التقرير'] == today_rep]['المراسل/الصحفي'].unique()) if not df_r.empty else 0
+            y_r = len(df_r[df_r['التقرير'] == yest_rep]['المراسل/الصحفي'].unique()) if not df_r.empty else 0
+            
+            t_g = len(df_g[df_g['التقرير'] == today_rep]) if not df_g.empty else 0
+            y_g = len(df_g[df_g['التقرير'] == yest_rep]) if not df_g.empty else 0
+
+            # 1. جدول المقارنة الرقمي
+            st.markdown("#### 📈 التغير في المؤشرات الرئيسية")
+            m1, m2, m3 = st.columns(3)
+            m1.metric("إجمالي المواد الإخبارية", int(t_p), f"{int(t_p - y_p)} مادة عن الأمس")
+            m2.metric("عدد المراسلين المشاركين", int(t_r), f"{int(t_r - y_r)} مراسل عن الأمس")
+            m3.metric("عدد الضيوف المستضافين", int(t_g), f"{int(t_g - y_g)} ضيف عن الأمس")
+
+            st.markdown("---")
+            # 2. رسم عمودي مقارن
+            st.markdown("#### 📊 مقارنة قوالب التقديم (أمس مقابل اليوم)")
+            if not df_p.empty:
+                comp_p = df_p[df_p['التقرير'].isin([today_rep, yest_rep])]
+                fig_comp_p = px.bar(comp_p, x='شكل التقديم', y='العدد', color='التقرير', barmode='group', text='العدد', color_discrete_sequence=['#1976d2', '#90caf9'])
+                st.plotly_chart(fig_comp_p, use_container_width=True)
+
+            # 3. مقارنة سياسة واقتصاد
+            st.markdown("---")
+            st.markdown("#### 🌍 التغير في التغطية الموضوعية")
+            if not df_c.empty:
+                comp_c = df_c[df_c['التقرير'].isin([today_rep, yest_rep])]
+                fig_comp_c = px.pie(comp_c, values='العدد', names='التصنيف', facet_col='التقرير', color='التصنيف', color_discrete_map={'سياسة': '#ef553b', 'اقتصاد': '#00cc96'})
+                st.plotly_chart(fig_comp_c, use_container_width=True)
+
+            # 4. مقارنة نشاط المراسلين
+            st.markdown("---")
+            st.markdown("#### 🎙️ رادار نشاط المراسلين (زيادة ونقصان المداخلات)")
+            if not df_r.empty:
+                df_r_today = df_r[df_r['التقرير'] == today_rep].groupby('المراسل/الصحفي')['عدد المداخلات'].sum().reset_index()
+                df_r_yest = df_r[df_r['التقرير'] == yest_rep].groupby('المراسل/الصحفي')['عدد المداخلات'].sum().reset_index()
+                
+                merged_r = pd.merge(df_r_today, df_r_yest, on='المراسل/الصحفي', how='outer', suffixes=(' (اليوم)', ' (الأمس)')).fillna(0)
+                merged_r['الفرق'] = merged_r['عدد المداخلات (اليوم)'] - merged_r['عدد المداخلات (الأمس)']
+                merged_r = merged_r.sort_values('الفرق', ascending=False)
+                
+                st.dataframe(merged_r.style.background_gradient(subset=['الفرق'], cmap='coolwarm'), use_container_width=True)
+
+    # ----------------------------------------------------------------------
+    # التبويب الثالث: قاعدة البيانات
+    # ----------------------------------------------------------------------
+    with tab3:
+        st.markdown("### 🗄️ استكشاف وتصدير البيانات")
+        report_filter = st.selectbox("تصفية البيانات حسب التقرير:", ["الكل"] + report_names)
+        
+        if not df_g.empty:
+            st.markdown("#### 🎙️ سجل الضيوف والخبراء")
+            display_df = df_g if report_filter == "الكل" else df_g[df_g['التقرير'] == report_filter]
+            st.dataframe(display_df, use_container_width=True)
+            
+        if not df_o.empty:
+            st.markdown("#### 👔 سجل تصريحات المسؤولين")
+            display_df_o = df_o if report_filter == "الكل" else df_o[df_o['التقرير'] == report_filter]
+            st.dataframe(display_df_o, use_container_width=True)
