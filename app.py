@@ -124,8 +124,6 @@ if uploaded_files:
             with c2:
                 st.info("💡 يعكس هذا التصنيف تركيز التغطية. يمكنك ملاحظة طغيان الملف السياسي أثناء التغطيات الخاصة، بينما يبرز الاقتصاد في أوقات الأزمات المالية.")
                 st.dataframe(comb_c, use_container_width=True)
-        else:
-            st.warning("لم يتم العثور على بيانات التصنيف.")
 
     # ----------------------------------------
     # التبويب الثالث: شبكة التغطية (مراسلين وضيوف)
@@ -145,4 +143,25 @@ if uploaded_files:
                 
         with r2:
             if data['guests']:
-                st.markdown("#### تصنيف الضيوف الميدانيين وال
+                st.markdown("#### تصنيف الضيوف الميدانيين والخبراء")
+                comb_g = pd.concat(data['guests'])
+                guest_types = comb_g['الصفة'].value_counts().reset_index()
+                guest_types.columns = ['صفة الضيف', 'التكرار']
+                fig_g = px.treemap(guest_types.head(15), path=['صفة الضيف'], values='التكرار', color='التكرار', color_continuous_scale='Teal')
+                st.plotly_chart(fig_g, use_container_width=True)
+
+    # ----------------------------------------
+    # التبويب الرابع: البيانات التفصيلية
+    # ----------------------------------------
+    with tab4:
+        st.markdown("### 📋 استعراض البيانات التفصيلية")
+        if data['officials']:
+            st.markdown("**أبرز تصريحات المسؤولين:**")
+            st.dataframe(pd.concat(data['officials']), use_container_width=True)
+        if data['guests']:
+            st.markdown("**سجل الضيوف والخبراء:**")
+            st.dataframe(pd.concat(data['guests']), use_container_width=True)
+        if data['reporters']:
+            st.markdown("**سجل المداخلات للمراسلين:**")
+            comb_r_full = pd.concat(data['reporters']).groupby('المراسل/الصحفي').sum().reset_index().sort_values(by='عدد المداخلات', ascending=False)
+            st.dataframe(comb_r_full, use_container_width=True)
