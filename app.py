@@ -1,4 +1,73 @@
-# ----------------------------------------
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+from docx import Document
+
+# 1. إعدادات الصفحة والتصميم
+st.set_page_config(page_title="Asharq Analytics Hub", layout="wide", page_icon="📺")
+
+st.markdown("""
+    <style>
+    .main { background-color: #f8f9fa; }
+    .stMetric { background-color: #ffffff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-left: 5px solid #1877f2; }
+    h1, h2, h3 { color: #202124; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-weight: 600; }
+    .stTabs [data-baseweb="tab-list"] { gap: 24px; }
+    .stTabs [data-baseweb="tab"] { height: 50px; white-space: pre-wrap; background-color: #ffffff; border-radius: 8px 8px 0 0; padding: 10px 20px; box-shadow: 0 -2px 5px rgba(0,0,0,0.02); }
+    .stTabs [aria-selected="true"] { background-color: #1877f2; color: white; }
+    </style>
+    """, unsafe_allow_html=True)
+
+# 2. دالة استخراج البيانات
+@st.cache_data
+def process_files(uploaded_files):
+    all_data = {'presentation': [], 'category': [], 'reporters': [], 'guests': [], 'officials': []}
+    
+    for file in uploaded_files:
+        try:
+            doc = Document(file)
+            for table in doc.tables:
+                rows = [[cell.text.strip() for cell in row.cells] for row in table.rows]
+                if len(rows) > 1:
+                    df = pd.DataFrame(rows[1:], columns=[c.strip() for c in rows[0]])
+                    cols = df.columns.tolist()
+                    
+                    if 'شكل التقديم' in cols and 'العدد' in cols:
+                        df['العدد'] = pd.to_numeric(df['العدد'].astype(str).str.replace(r'\D', '', regex=True), errors='coerce').fillna(0)
+                        all_data['presentation'].append(df[['شكل التقديم', 'العدد']])
+                    
+                    elif 'التصنيف' in cols and 'العدد' in cols:
+                        df['العدد'] = pd.to_numeric(df['العدد'].astype(str).str.replace(r'\D', '', regex=True), errors='coerce').fillna(0)
+                        all_data['category'].append(df[['التصنيف', 'العدد']])
+                        
+                    elif 'المراسل/الصحفي' in cols and 'عدد المداخلات' in cols:
+                        df['عدد المداخلات'] = pd.to_numeric(df['عدد المداخلات'], errors='coerce').fillna(0)
+                        all_data['reporters'].append(df[['المراسل/الصحفي', 'عدد المداخلات']])
+                    
+                    elif 'الضيف' in cols and 'الصفة' in cols:
+                        all_data['guests'].append(df)
+                        
+                    elif 'المسؤول' in cols and 'الصفة' in cols:
+                        all_data['officials'].append(df)
+        except Exception:
+            continue
+    return all_data
+
+# 3. واجهة الموقع
+st.title("📺 مركز تحليلات البث الإخباري - قناة الشرق")
+st.markdown("لوحة تحكم تفاعلية متقدمة لتحليل الأداء والمحتوى والضيوف")
+
+uploaded_files = st.file_uploader("ارفق تقارير الرصد الشاملة (يمكنك تحديد عدة تقارير معاً)", type="docx", accept_multiple_files=True)
+
+if uploaded_files:
+    with st.spinner("جاري المعالجة والتحليل العميق للبيانات..."):
+        data = process_files(uploaded_files)
+    
+    st.success(f"تم تحليل {len(uploaded_files)} تقارير وتجميع البيانات بنجاح.")
+    st.markdown("---")
+    
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 نظرة عامة", "🌍 التصنيف الموضوعي", "🎙️ شبكة التغطية", "📋 البيانات التفصيلية"])
+    
+    # ----------------------------------------
     # التبويب الأول: نظرة عامة (Overview)
     # ----------------------------------------
     with tab1:
@@ -17,29 +86,63 @@
         
         st.markdown("---")
         if data['presentation']:
-            st.markdown("#### 🎯 تفاصيل قوالب العرض (مفصلة)")
+            st.markdown("#### 🎯 تفاصيل قوالب العرض (مفصلة بوضوح)")
             
-            # تجهيز وترتيب البيانات من الأكبر للأصغر
             comb_p = pd.concat(data['presentation']).groupby('شكل التقديم').sum().reset_index()
             comb_p = comb_p.sort_values(by='العدد', ascending=False)
             
-            # 1. عرض أبرز القوالب في بطاقات منفصلة (فصل التصنيفات)
+            # كروت لأعلى 4 قوالب
             top_formats = st.columns(min(4, len(comb_p)))
             for i in range(min(4, len(comb_p))):
                 top_formats[i].info(f"**{comb_p.iloc[i]['شكل التقديم']}** \n\n {int(comb_p.iloc[i]['العدد'])} مادة")
                 
             st.markdown("<br>", unsafe_allow_html=True)
             
-            # 2. مخطط أعمدة أفقي يفصل كل قالب بوضوح
+            # مخطط الأعمدة الأفقي بدلاً من الدائري المزدحم
             fig_p = px.bar(comb_p, x='العدد', y='شكل التقديم', orientation='h',
                            text='العدد', color='شكل التقديم',
                            color_discrete_sequence=px.colors.qualitative.Prism)
-            
-            # تحسين شكل المخطط ليكون جذاباً
             fig_p.update_traces(textposition='outside')
-            fig_p.update_layout(showlegend=False, 
-                                yaxis={'categoryorder':'total ascending'},
-                                plot_bgcolor='rgba(0,0,0,0)',
-                                xaxis_title="", yaxis_title="")
-            
+            fig_p.update_layout(showlegend=False, yaxis={'categoryorder':'total ascending'}, 
+                                plot_bgcolor='rgba(0,0,0,0)', xaxis_title="", yaxis_title="")
             st.plotly_chart(fig_p, use_container_width=True)
+
+    # ----------------------------------------
+    # التبويب الثاني: التصنيف الموضوعي
+    # ----------------------------------------
+    with tab2:
+        st.markdown("### 🌍 تحليل المحتوى: سياسة مقابل اقتصاد")
+        if data['category']:
+            comb_c = pd.concat(data['category']).groupby('التصنيف').sum().reset_index()
+            c1, c2 = st.columns([2, 1])
+            with c1:
+                fig_c = px.bar(comb_c, x='التصنيف', y='العدد', color='التصنيف', 
+                               text='العدد', color_discrete_map={'سياسة': '#ef553b', 'اقتصاد': '#00cc96'})
+                fig_c.update_traces(textposition='outside')
+                fig_c.update_layout(showlegend=False, plot_bgcolor='rgba(0,0,0,0)', yaxis_title="عدد المواد", xaxis_title="")
+                st.plotly_chart(fig_c, use_container_width=True)
+            with c2:
+                st.info("💡 يعكس هذا التصنيف تركيز التغطية. يمكنك ملاحظة طغيان الملف السياسي أثناء التغطيات الخاصة، بينما يبرز الاقتصاد في أوقات الأزمات المالية.")
+                st.dataframe(comb_c, use_container_width=True)
+        else:
+            st.warning("لم يتم العثور على بيانات التصنيف.")
+
+    # ----------------------------------------
+    # التبويب الثالث: شبكة التغطية (مراسلين وضيوف)
+    # ----------------------------------------
+    with tab3:
+        st.markdown("### 🎙️ خريطة المراسلين وأبرز الضيوف")
+        r1, r2 = st.columns(2)
+        
+        with r1:
+            if data['reporters']:
+                st.markdown("#### أعلى 10 مراسلين نشاطاً")
+                comb_r = pd.concat(data['reporters']).groupby('المراسل/الصحفي').sum().reset_index()
+                top_r = comb_r.sort_values(by='عدد المداخلات', ascending=False).head(10)
+                fig_r = px.bar(top_r, x='عدد المداخلات', y='المراسل/الصحفي', orientation='h', color='عدد المداخلات', color_continuous_scale='Blues')
+                fig_r.update_layout(yaxis={'categoryorder':'total ascending'})
+                st.plotly_chart(fig_r, use_container_width=True)
+                
+        with r2:
+            if data['guests']:
+                st.markdown("#### تصنيف الضيوف الميدانيين وال
