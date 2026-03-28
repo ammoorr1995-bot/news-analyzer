@@ -2,73 +2,63 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from docx import Document
+import io
 
-# إعدادات الصفحة لتظهر بشكل عريض واحترافي
 st.set_page_config(page_title="News Analytics Pro | الشرق", layout="wide")
 
 def parse_docx(file):
-    """دالة لاستخراج الجداول والبيانات من ملف التقرير"""
+    """استخراج الجداول بدقة مع إضافة اسم الملف لتمييز البيانات"""
     doc = Document(file)
-    data_frames = {}
+    data_frames = {'presentation': None, 'category': None}
     
     for table in doc.tables:
         rows = [[cell.text.strip() for cell in row.cells] for row in table.rows]
         if len(rows) > 1:
-            # تنظيف البيانات وحذف الصفوف المكررة إن وجدت
             df = pd.DataFrame(rows[1:], columns=rows[0])
-            # التعرف على الجداول بناءً على أسماء الأعمدة في تقريرك
-            if 'شكل التقديم' in df.columns: 
-                data_frames['presentation'] = df
-            elif 'التصنيف' in df.columns: 
-                data_frames['category'] = df
-            elif 'المؤشر' in df.columns:
-                data_frames['kpis'] = df
+            # تنظيف وتوحيد البيانات
+            if 'شكل التقديم' in df.columns:
+                df['العدد'] = pd.to_numeric(df['العدد'], errors='coerce')
+                data_frames['presentation'] = df[['شكل التقديم', 'العدد']]
+            elif 'التصنيف' in df.columns:
+                df['العدد'] = pd.to_numeric(df['العدد'].astype(str).str.replace('≈ ', '').str.replace('%', ''), errors='coerce')
+                data_frames['category'] = df[['التصنيف', 'العدد']]
     return data_frames
 
-# واجهة الموقع
-st.title("📊 نظام تحليل رصد البث الإخباري - قناة الشرق")
-st.markdown("---")
+st.title("📊 نظام تحليل ودمج تقارير البث - قناة الشرق")
+st.info("يمكنك الآن ارفاق عدة ملفات (يومية/أسبوعية) وسيقوم النظام بدمجها تلقائياً في رسم بياني واحد.")
 
-# رفع الملف
-uploaded_file = st.file_uploader("ارفق تقرير الرصد الشامل (docx)", type="docx")
+# تفعيل خاصية اختيار ملفات متعددة
+uploaded_files = st.file_uploader("ارفق تقارير الرصد (يمكنك اختيار أكثر من ملف)", type="docx", accept_multiple_files=True)
 
-if uploaded_file:
-    with st.spinner('جاري معالجة التقرير...'):
-        results = parse_docx(uploaded_file)
-        
-        # 1. عرض المؤشرات الرئيسية (KPIs) في الأعلى
-        if 'kpis' in results:
-            st.subheader("📌 المؤشرات الرئيسية")
-            kpi_df = results['kpis']
-            cols = st.columns(len(kpi_df))
-            for idx, row in kpi_df.iterrows():
-                cols[idx].metric(row['المؤشر'], row['القيمة'])
-            st.markdown("---")
+if uploaded_files:
+    all_presentation = []
+    all_category = []
+    
+    for uploaded_file in uploaded_files:
+        res = parse_docx(uploaded_file)
+        if res['presentation'] is not None:
+            all_presentation.append(res['presentation'])
+        if res['category'] is not None:
+            all_category.append(res['category'])
 
-        # 2. عرض الرسوم البيانية في أعمدة
+    # دمج البيانات من كل الملفات
+    if all_presentation or all_category:
         col1, col2 = st.columns(2)
 
-        if 'presentation' in results:
-            with col1:
-                st.subheader("🎯 توزيع أشكال التقديم")
-                df_p = results['presentation']
-                df_p['العدد'] = pd.to_numeric(df_p['العدد'], errors='coerce')
-                fig_pie = px.pie(df_p, values='العدد', names='شكل التقديم', hole=0.4,
-                                 color_discrete_sequence=px.colors.qualitative.Set3)
+        with col1:
+            if all_presentation:
+                st.subheader("🎯 إجمالي أشكال التقديم (مجمع)")
+                combined_p = pd.concat(all_presentation).groupby('شكل التقديم').sum().reset_index()
+                fig_pie = px.pie(combined_p, values='العدد', names='شكل التقديم', hole=0.4, title=f"تحليل لـ {len(uploaded_files)} تقارير")
                 st.plotly_chart(fig_pie, use_container_width=True)
 
-        if 'category' in results:
-            with col2:
-                st.subheader("🌍 التصنيف الموضوعي")
-                df_c = results['category']
-                # تنظيف الأرقام من رموز مثل (≈) و (%)
-                df_c['العدد'] = pd.to_numeric(df_c['العدد'].astype(str).str.replace('≈ ', '').str.replace('%', ''), errors='coerce')
-                fig_bar = px.bar(df_c, x='التصنيف', y='العدد', color='التصنيف', 
-                                 text_auto=True, title="عدد المواد حسب التخصص")
+        with col2:
+            if all_category:
+                st.subheader("🌍 إجمالي التصنيف الموضوعي (مجمع)")
+                combined_c = pd.concat(all_category).groupby('التصنيف').sum().reset_index()
+                fig_bar = px.bar(combined_c, x='التصنيف', y='العدد', color='التصنيف', text_auto=True)
                 st.plotly_chart(fig_bar, use_container_width=True)
-
-st.sidebar.markdown("""
-### حول النظام
-هذا المشغل مخصص لتحليل تقارير **متابعة البث**. 
-يعتمد على استخراج البيانات من الجداول المضمنة في ملفات Word وتحويلها إلى رؤى بصرية.
-""")
+                
+        st.success(f"تم تحليل ودمج بيانات {len(uploaded_files)} ملفات بنجاح.")
+    else:
+        st.error("لم يتم العثور على جداول بيانات متوافقة في الملفات المرفوعة. تأكد من وجود جداول 'شكل التقديم' أو 'التصنيف'.")
