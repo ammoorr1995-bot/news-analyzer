@@ -18,18 +18,21 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 3. دالة استخراج البيانات التلقائية من الخادم (GitHub)
-@st.cache_data
+# 3. دالة استخراج البيانات (محدثة بمسار مطلق وبدون كاش لتحديث فوري)
 def process_server_files():
     all_data = {'presentation': [], 'category': [], 'reporters': [], 'guests': [], 'officials': []}
     
-    # البحث التلقائي عن أي ملف وورد في المستودع
-    docx_files = [f for f in os.listdir('.') if f.endswith('.docx') and not f.startswith('~')]
+    # الحل الجذري: تحديد المسار الدقيق الذي يوجد فيه ملف app.py حالياً
+    current_dir = os.path.dirname(os.path.abspath(__file__))
     
-    for file in docx_files:
+    # البحث عن كل ملفات الوورد داخل هذا المسار الدقيق
+    docx_files = [f for f in os.listdir(current_dir) if f.endswith('.docx') and not f.startswith('~')]
+    
+    for file_name in docx_files:
+        file_path = os.path.join(current_dir, file_name) # استخدام المسار الكامل لفتح الملف
         try:
-            doc = Document(file)
-            report_name = file.replace('.docx', '')
+            doc = Document(file_path)
+            report_name = file_name.replace('.docx', '')
             for table in doc.tables:
                 rows = [[cell.text.strip() for cell in row.cells] for row in table.rows]
                 if len(rows) > 1:
@@ -60,10 +63,10 @@ st.sidebar.markdown("---")
 menu = st.sidebar.radio("القائمة الرئيسية:", ["🏠 الصفحة الرئيسية", "📊 لوحة الأداء العام", "📈 مقارنة التقارير الزمنية", "🗄️ قاعدة البيانات الخام"])
 
 st.sidebar.markdown("---")
-st.sidebar.success("🟢 النظام متصل بالسيرفر المباشر (Auto-Sync)")
+st.sidebar.success("🟢 متصل بالسيرفر الحي (Live Sync)")
 
-# تحميل البيانات تلقائياً وبدون تدخل المستخدم!
-with st.spinner("جاري جلب البيانات من الخادم..."):
+# معالجة البيانات
+with st.spinner("جاري جلب وقراءة البيانات من الخادم..."):
     data, server_files = process_server_files()
 
 df_p = pd.concat(data['presentation']) if data['presentation'] else pd.DataFrame()
@@ -85,12 +88,12 @@ if menu == "🏠 الصفحة الرئيسية":
     st.markdown("---")
     
     if not server_files:
-        st.error("لم يتم العثور على تقارير في الخادم (GitHub). يرجى رفع ملفات الوورد إلى مستودع GitHub الخاص بك.")
+        st.error("لم يتم العثور على تقارير. يرجى التأكد من رفع ملفات الوورد بصيغة (.docx) في نفس مكان ملف (app.py) في GitHub.")
     else:
-        st.success(f"✅ تم تحميل البيانات تلقائياً! يوجد حالياً ({len(server_files)}) تقارير متصلة باللوحة. يمكنك التنقل بين الصفحات من القائمة الجانبية.")
+        st.success(f"✅ تم تحميل البيانات بنجاح! يوجد حالياً ({len(server_files)}) تقارير متصلة باللوحة (مثل: {server_files[0]}). تنقل بين الصفحات من القائمة الجانبية.")
 
 # ==========================================
-# باقي الصفحات (تعمل تلقائياً)
+# الصفحة الثانية: لوحة الأداء العام
 # ==========================================
 elif menu == "📊 لوحة الأداء العام":
     st.title("📊 لوحة الأداء الإجمالي")
@@ -119,6 +122,9 @@ elif menu == "📊 لوحة الأداء العام":
                 fig_c = px.pie(comb_c, values='العدد', names='التصنيف', hole=0.5, color_discrete_map={'سياسة': '#ef553b', 'اقتصاد': '#00cc96'})
                 st.plotly_chart(fig_c, use_container_width=True)
 
+# ==========================================
+# الصفحة الثالثة: مقارنة التقارير الزمنية
+# ==========================================
 elif menu == "📈 مقارنة التقارير الزمنية":
     st.title("📈 مقارنة الاتجاهات الزمنية والأداء")
     if not server_files:
@@ -136,6 +142,9 @@ elif menu == "📈 مقارنة التقارير الزمنية":
                 fig_stacked.update_layout(plot_bgcolor='rgba(0,0,0,0)')
                 st.plotly_chart(fig_stacked, use_container_width=True)
 
+# ==========================================
+# الصفحة الرابعة: مستكشف البيانات
+# ==========================================
 elif menu == "🗄️ قاعدة البيانات الخام":
     st.title("🗄️ مستكشف البيانات")
     if not server_files:
@@ -148,3 +157,8 @@ elif menu == "🗄️ قاعدة البيانات الخام":
             st.markdown("#### 🎙️ سجل الضيوف والخبراء")
             display_df = df_g if report_filter == "الكل" else df_g[df_g['التقرير'] == report_filter]
             st.dataframe(display_df, use_container_width=True)
+            
+        if not df_o.empty:
+            st.markdown("#### 👔 سجل تصريحات المسؤولين")
+            display_df_o = df_o if report_filter == "الكل" else df_o[df_o['التقرير'] == report_filter]
+            st.dataframe(display_df_o, use_container_width=True)
