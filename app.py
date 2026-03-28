@@ -19,7 +19,7 @@ st.markdown("""
 
 from docx import Document
 
-@st.cache_data # تسريع أداء الموقع عند تحميل نفس الملفات
+@st.cache_data
 def process_files(uploaded_files):
     all_data = {'presentation': [], 'category': [], 'reporters': [], 'guests': [], 'officials': []}
     
@@ -32,26 +32,21 @@ def process_files(uploaded_files):
                     df = pd.DataFrame(rows[1:], columns=[c.strip() for c in rows[0]])
                     cols = df.columns.tolist()
                     
-                    # 1. شكل التقديم
                     if 'شكل التقديم' in cols and 'العدد' in cols:
                         df['العدد'] = pd.to_numeric(df['العدد'].astype(str).str.replace(r'\D', '', regex=True), errors='coerce').fillna(0)
                         all_data['presentation'].append(df[['شكل التقديم', 'العدد']])
                     
-                    # 2. التصنيف (سياسة/اقتصاد)
                     elif 'التصنيف' in cols and 'العدد' in cols:
                         df['العدد'] = pd.to_numeric(df['العدد'].astype(str).str.replace(r'\D', '', regex=True), errors='coerce').fillna(0)
                         all_data['category'].append(df[['التصنيف', 'العدد']])
                         
-                    # 3. المراسلين
                     elif 'المراسل/الصحفي' in cols and 'عدد المداخلات' in cols:
                         df['عدد المداخلات'] = pd.to_numeric(df['عدد المداخلات'], errors='coerce').fillna(0)
                         all_data['reporters'].append(df[['المراسل/الصحفي', 'عدد المداخلات']])
                     
-                    # 4. الضيوف والخبراء
                     elif 'الضيف' in cols and 'الصفة' in cols:
                         all_data['guests'].append(df)
                         
-                    # 5. تصريحات المسؤولين
                     elif 'المسؤول' in cols and 'الصفة' in cols:
                         all_data['officials'].append(df)
         except Exception:
@@ -59,7 +54,6 @@ def process_files(uploaded_files):
             
     return all_data
 
-# --- رأس الصفحة ---
 st.title("📺 مركز تحليلات البث الإخباري - قناة الشرق")
 st.markdown("لوحة تحكم تفاعلية متقدمة لتحليل الأداء والمحتوى والضيوف")
 
@@ -72,25 +66,15 @@ if uploaded_files:
     st.success(f"تم تحليل {len(uploaded_files)} تقارير وتجميع البيانات بنجاح.")
     st.markdown("---")
     
-    # بناء التبويبات للواجهة
     tab1, tab2, tab3, tab4 = st.tabs(["📊 نظرة عامة", "🌍 التصنيف السياسي والاقتصادي", "🎙️ شبكة التغطية (مراسلين وضيوف)", "📋 الجداول والبيانات الخام"])
     
-    # ----------------------------------------
-    # التبويب الأول: نظرة عامة (Overview)
-    # ----------------------------------------
+    # --- التبويب الأول ---
     with tab1:
         st.markdown("### 📈 مؤشرات الأداء المجمعة")
         col1, col2, col3, col4 = st.columns(4)
         
-        # حساب الإجماليات
-        total_mats = 0
-        if data['presentation']:
-            total_mats = int(pd.concat(data['presentation'])['العدد'].sum())
-            
-        total_reporters = 0
-        if data['reporters']:
-            total_reporters = len(pd.concat(data['reporters'])['المراسل/الصحفي'].unique())
-            
+        total_mats = int(pd.concat(data['presentation'])['العدد'].sum()) if data['presentation'] else 0
+        total_reporters = len(pd.concat(data['reporters'])['المراسل/الصحفي'].unique()) if data['reporters'] else 0
         total_guests = sum([len(df) for df in data['guests']]) if data['guests'] else 0
         total_officials = sum([len(df) for df in data['officials']]) if data['officials'] else 0
 
@@ -108,9 +92,7 @@ if uploaded_files:
             fig_p.update_traces(textposition='inside', textinfo='percent+label')
             st.plotly_chart(fig_p, use_container_width=True)
 
-    # ----------------------------------------
-    # التبويب الثاني: التصنيف الموضوعي (سياسة / اقتصاد)
-    # ----------------------------------------
+    # --- التبويب الثاني ---
     with tab2:
         st.markdown("### 🌍 تحليل المحتوى: سياسة مقابل اقتصاد")
         if data['category']:
@@ -118,21 +100,18 @@ if uploaded_files:
             
             c1, c2 = st.columns([2, 1])
             with c1:
-                # رسم بياني شريطي متطور
                 fig_c = px.bar(comb_c, x='التصنيف', y='العدد', color='التصنيف', 
                                text='العدد', color_discrete_map={'سياسة': '#ef553b', 'اقتصاد': '#00cc96'})
                 fig_c.update_traces(textposition='outside')
                 fig_c.update_layout(showlegend=False, plot_bgcolor='rgba(0,0,0,0)', yaxis_title="عدد المواد", xaxis_title="")
                 st.plotly_chart(fig_c, use_container_width=True)
             with c2:
-                st.info("💡 يعكس هذا التصنيف تركيز التغطية. يمكنك ملاحظة طغيان الملف السياسي أثناء التغطيات الخاصة أو الحروب، بينما يبرز الاقتصاد في أوقات الأزمات المالية أو تأثير الممرات المائية.")
-                st.dataframe(comb_c.style.background_gradient(cmap='Blues'), use_container_width=True)
+                st.info("💡 يعكس هذا التصنيف تركيز التغطية. يمكنك ملاحظة طغيان الملف السياسي أثناء التغطيات الخاصة أو الحروب، بينما يبرز الاقتصاد في أوقات الأزمات المالية.")
+                st.dataframe(comb_c, use_container_width=True) # تم إزالة التلوين هنا لحل الخطأ
         else:
             st.warning("لم يتم العثور على جداول 'التصنيف' في التقارير المرفوعة.")
 
-    # ----------------------------------------
-    # التبويب الثالث: شبكة التغطية والضيوف
-    # ----------------------------------------
+    # --- التبويب الثالث ---
     with tab3:
         st.markdown("### 🎙️ خريطة المراسلين وأبرز الضيوف")
         r1, r2 = st.columns(2)
@@ -150,7 +129,6 @@ if uploaded_files:
             if data['guests']:
                 st.markdown("#### تصنيف الضيوف الميدانيين والخبراء")
                 comb_g = pd.concat(data['guests'])
-                # إحصاء تكرار صفات الضيوف (محلل سياسي، خبير عسكري، إلخ)
                 guest_types = comb_g['الصفة'].value_counts().reset_index()
                 guest_types.columns = ['صفة الضيف', 'التكرار']
                 fig_g = px.treemap(guest_types.head(15), path=['صفة الضيف'], values='التكرار', color='التكرار', color_continuous_scale='Teal')
@@ -158,12 +136,10 @@ if uploaded_files:
             else:
                 st.info("لا توجد بيانات للضيوف في هذا التقرير.")
 
-    # ----------------------------------------
-    # التبويب الرابع: الجداول التفصيلية (Data Tables)
-    # ----------------------------------------
+    # --- التبويب الرابع ---
     with tab4:
         st.markdown("### 📋 استعراض البيانات التفصيلية")
-        st.write("استخدم هذه الجداول للبحث، الترتيب، أو النسخ مباشرة.")
+        st.write("استخدم هذه الجداول للبحث والترتيب.")
         
         if data['officials']:
             st.markdown("**أبرز تصريحات المسؤولين:**")
