@@ -5,67 +5,60 @@ import plotly.graph_objects as go
 from docx import Document
 import re
 
-# 1. إعدادات الهوية البصرية الفاخرة (Contrast-Focused UI)
+# 1. إعدادات الهوية البصرية (High Contrast)
 st.set_page_config(page_title="Asharq Analytics Hub", layout="wide", page_icon="💎")
 
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@400;700&display=swap');
     html, body, [class*="st-"] { font-family: 'Noto Kufi Arabic', sans-serif; text-align: right; }
-    
-    /* خلفية مريحة وتباين ألوان عالٍ للعيون */
     .stApp { background-color: #0f172a; color: #f8fafc; }
-    
-    /* تصميم بطاقات المؤشرات بوضوح فائق */
-    .stMetric { 
-        background: #1e293b !important; 
-        border: 1px solid #3b82f6 !important; 
-        border-radius: 12px !important; 
-        padding: 20px !important;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-    }
-    [data-testid="stMetricValue"] { color: #ffffff !important; font-size: 3rem !important; font-weight: 800 !important; }
-    [data-testid="stMetricLabel"] { color: #94a3b8 !important; font-size: 1.1rem !important; font-weight: 600 !important; }
-
-    /* صندوق الاستنتاجات الذكية */
-    .ai-insight-box { 
-        border-right: 6px solid #3b82f6; 
-        background: rgba(59, 130, 246, 0.15); 
-        padding: 25px; 
-        border-radius: 10px; 
-        color: #f1f5f9; 
-        font-size: 1.2rem; 
-        line-height: 1.9;
-    }
+    .stMetric { background: #1e293b !important; border: 1px solid #3b82f6 !important; border-radius: 12px !important; padding: 20px !important; }
+    [data-testid="stMetricValue"] { color: #ffffff !important; font-size: 2.8rem !important; font-weight: 800 !important; }
+    .ai-insight-box { border-right: 6px solid #3b82f6; background: rgba(59, 130, 246, 0.15); padding: 20px; border-radius: 10px; color: #f1f5f9; line-height: 1.8; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- محرك تنقية الأسماء الذكي (تجميع المراسلين) ---
-def extract_clean_name(text):
+# --- محرك التطهير اللغوي (Advanced Normalization) ---
+def normalize_name(text):
     if pd.isna(text) or text == "": return "غير معروف"
-    # الكلمات المستبعدة ليبقى الاسم فقط
-    trash_words = [
-        "مراسل الشرق", "مراسلة الشرق", "الشرق", "من غزة", "في القدس", "من", "في", 
-        "مراسل", "مراسلة", "واشنطن", "القدس", "دبي", "الرياض", "القاهرة", "بيروت", "لندن"
-    ]
-    clean = str(text)
-    clean = re.sub(r'[-–—|/:]', ' ', clean)
-    for word in trash_words:
-        clean = clean.replace(word, "")
-    parts = clean.split()
+    
+    name = str(text).strip()
+    
+    # 1. إزالة الألقاب والجهات (بتر صارم)
+    # نحذف كل ما بعد الكلمات المفتاحية الوظيفية
+    patterns = [r"مراسل.*", r"مدير.*", r"خبير.*", r"محلل.*", r"من\s.*", r"في\s.*", r"الشرق.*"]
+    for p in patterns:
+        name = re.sub(p, "", name)
+    
+    # 2. تنظيف الرموز
+    name = re.sub(r'[-–—|/:،,]', ' ', name)
+    
+    # 3. توحيد الحروف العربية (إدارة التباين اللغوي)
+    name = re.sub(r"[أإآ]", "ا", name)
+    name = re.sub(r"ة", "ه", name)
+    name = re.sub(r"ى", "ي", name)
+    
+    # 4. معالجة المسافات الحرجة (مثل عبدالله و عبد الله)
+    # نحذف المسافات بين "عبد" والاسم الذي يليها
+    name = re.sub(r"عبد\s+", "عبد", name)
+    
+    # 5. تنظيف المسافات المزدوجة
+    name = " ".join(name.split())
+    
+    # 6. اقتطاع الاسم (أول كلمتين غالباً هما الاسم الأساسي)
+    parts = name.split()
     if len(parts) >= 2:
-        return " ".join(parts[:3]).strip() # نأخذ أول 3 كلمات فقط كاسم
-    return clean.strip()
+        return " ".join(parts[:2]).strip()
+    
+    return name if name else "غير معروف"
 
-# تصحيح دالة تنظيف الأرقام لتفادي خطأ السيرفر
 def clean_num(text):
     if pd.isna(text): return 0
     res = re.findall(r'\d+', str(text))
-    if res:
-        return int(res[0])
-    return 0
+    return int(res[0]) if res else 0
 
-# 2. محرك المعالجة المتقدم (Multi-Report Parser)
+# 2. محرك المعالجة المتقدم
 @st.cache_data
 def advanced_parser(files):
     pool = {'p': [], 'r': [], 'g': []}
@@ -86,19 +79,19 @@ def advanced_parser(files):
                         pool['p'].append(df)
                     elif any("المراسل" in c for c in cols) and num_col:
                         df['Count'] = df[num_col].apply(clean_num)
-                        df['اسم_نظيف'] = df.iloc[:, 0].apply(extract_clean_name)
+                        # تطبيق التطهير اللغوي
+                        df['اسم_نظيف'] = df.iloc[:, 0].apply(normalize_name)
                         pool['r'].append(df)
                     elif any("الضيف" in c for c in cols):
-                        df['اسم_نظيف'] = df.iloc[:, 0].apply(extract_clean_name)
+                        df['اسم_نظيف'] = df.iloc[:, 0].apply(normalize_name)
                         pool['g'].append(df)
         except: continue
     return pool
 
 # --- الواجهة الرئيسية ---
-st.markdown("<h1 style='text-align: center; color: #3b82f6; font-size: 3rem; margin-bottom:0;'>ASHARQ <span style='color:white'>ANALYTICS HUB</span></h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: #94a3b8; font-size: 1.2rem;'>المركز الذكي لتحليل وقياس أداء المحتوى الإخباري</p>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center; color: #3b82f6;'>ASHARQ <span style='color:white'>ANALYTICS HUB</span></h1>", unsafe_allow_html=True)
 
-uploaded = st.sidebar.file_uploader("📂 ارفع حزمة التقارير (Docx):", type="docx", accept_multiple_files=True)
+uploaded = st.sidebar.file_uploader("📂 ارفع ملفات الرصد (Docx):", type="docx", accept_multiple_files=True)
 
 if uploaded:
     data = advanced_parser(uploaded)
@@ -106,44 +99,34 @@ if uploaded:
     df_r = pd.concat(data['r']) if data['r'] else pd.DataFrame()
     df_g = pd.concat(data['g']) if data['g'] else pd.DataFrame()
 
-    tabs = st.tabs(["🚀 الملخص التنفيذي", "📅 التحليل اليومي", "⚖️ المقارنة الذكية", "🌟 النجوم والموارد", "📥 التصدير"])
+    tabs = st.tabs(["🚀 الملخص التنفيذي", "📅 التحليل اليومي", "🌟 النجوم والموارد", "📥 تصدير"])
 
-    # تبويب 1: الملخص التنفيذي
+    with tabs[2]:
+        st.markdown("### 🌟 تحليل الكوادر (تجميع ذكي متطور)")
+        cat = st.selectbox("اختر الفئة:", ["🎙️ المراسلين", "👥 الضيوف"])
+        
+        target_df = df_r if cat == "🎙️ المراسلين" else df_g
+        
+        if not target_df.empty:
+            # ترتيب الأسماء أبجدياً لتسهيل البحث
+            clean_list = sorted(target_df['اسم_نظيف'].unique())
+            selected_name = st.selectbox("اختر الاسم (تم الدمج لغوياً):", clean_list)
+            
+            personal_data = target_df[target_df['اسم_نظيف'] == selected_name]
+            
+            c1, c2 = st.columns([1, 2])
+            with c1:
+                total_val = personal_data['Count'].sum() if 'Count' in personal_data.columns else len(personal_data)
+                st.metric(f"إجمالي نشاط {selected_name}", int(total_val))
+            with c2:
+                st.write("**سجل التواجد في التقارير:**")
+                st.dataframe(personal_data[['Source']], use_container_width=True)
+
     with tabs[0]:
-        st.markdown("### 🧠 رؤية المحلل الذكي")
         if not df_p.empty:
             total = df_p['Count'].sum()
-            avg = total / len(uploaded)
-            
-            c1, c2 = st.columns([2, 1])
-            with c1:
-                st.metric("إجمالي الإنتاج الإخباري", f"{int(total):,}", f"بمعدل {avg:.1f} يومياً")
-                st.markdown(f"<div class='ai-insight-box'><b>💡 استنتاج استراتيجي:</b><br>تظهر البيانات كثافة إنتاجية مستقرة. النظام يشير إلى كفاءة عالية في توزيع الموارد البشرية وتغطية شاملة لجميع القوالب الإخبارية.</div>", unsafe_allow_html=True)
-            with c2:
-                fig_gauge = go.Figure(go.Indicator(mode="gauge+number", value=avg, 
-                                                  gauge={'axis':{'range':[0,300]}, 'bar':{'color':"#3b82f6"}}))
-                fig_gauge.update_layout(height=300, paper_bgcolor='rgba(0,0,0,0)', font_color="white")
-                st.plotly_chart(fig_gauge, use_container_width=True)
+            st.metric("إجمالي المواد المرصودة", f"{int(total):,}")
+            st.plotly_chart(px.bar(df_p.groupby('شكل التقديم')['Count'].sum().reset_index(), x='Count', y='شكل التقديم', orientation='h', template="plotly_dark"), use_container_width=True)
 
-    # تبويب 4: النجوم والموارد (حل مشكلة تجميع الأسماء)
-    with tabs[3]:
-        st.markdown("### 🌟 تحليل أداء الكوادر والضيوف")
-        cat = st.selectbox("اختر الفئة المستهدفة:", ["🎙️ المراسلين", "👥 الضيوف"])
-        
-        if cat == "🎙️ المراسلين" and not df_r.empty:
-            rep_list = sorted(df_r['اسم_نظيف'].unique())
-            rep_name = st.selectbox("اختر اسم المراسل (الأسماء مجمعة تلقائياً):", rep_list)
-            rep_data = df_r[df_r['اسم_نظيف'] == rep_name]
-            st.metric(f"إجمالي مداخلات {rep_name}", int(rep_data['Count'].sum()))
-            st.plotly_chart(px.line(rep_data, x='Source', y='Count', markers=True, title=f"سجل أداء {rep_name}"), use_container_width=True)
-        
-        elif cat == "👥 الضيوف" and not df_g.empty:
-            guest_list = sorted(df_g['اسم_نظيف'].unique())
-            guest_name = st.selectbox("اختر اسم الضيف:", guest_list)
-            guest_data = df_g[df_g['اسم_نظيف'] == guest_name]
-            st.metric(f"عدد مرات الظهور لـ {guest_name}", len(guest_data))
-            st.dataframe(guest_data[['Source']], use_container_width=True)
-
-    # التبويبات الأخرى (المقارنة والتحليل اليومي) تعمل بنفس كفاءة الأسماء النظيفة
 else:
-    st.info("💎 بانتظار رفع ملفات الرصد لتنشيط منصة التحليل الاستراتيجي.")
+    st.info("💎 ارفع ملفاتك لتفعيل محرك التطهير اللغوي والتحليل الاستراتيجي.")
