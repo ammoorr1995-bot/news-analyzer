@@ -7,7 +7,7 @@ from docx import Document
 # 1. إعدادات الصفحة
 st.set_page_config(page_title="Asharq News Analytics", layout="wide", page_icon="🌐")
 
-# 2. تصميم CSS احترافي
+# تصميم CSS
 st.markdown("""
     <style>
     .stApp { background-color: #f4f7f6; }
@@ -18,18 +18,21 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 3. دالة استخراج البيانات (محدثة بمسار مطلق وبدون كاش لتحديث فوري)
+# 2. دالة استخراج البيانات (محدثة بأقوى طريقة للبحث)
 def process_server_files():
     all_data = {'presentation': [], 'category': [], 'reporters': [], 'guests': [], 'officials': []}
     
-    # الحل الجذري: تحديد المسار الدقيق الذي يوجد فيه ملف app.py حالياً
-    current_dir = os.path.dirname(os.path.abspath(__file__))
+    # استخدام المسار الأساسي لبيئة العمل (الأكثر أماناً في Streamlit)
+    current_dir = os.getcwd()
     
-    # البحث عن كل ملفات الوورد داخل هذا المسار الدقيق
-    docx_files = [f for f in os.listdir(current_dir) if f.endswith('.docx') and not f.startswith('~')]
+    # جلب قائمة بكل الملفات الموجودة في السيرفر (لأغراض الفحص)
+    all_files_in_dir = os.listdir(current_dir)
+    
+    # البحث بمرونة: تجاهل حالة الأحرف والتأكد من عدم وجود مسافات مخفية
+    docx_files = [f for f in all_files_in_dir if f.strip().lower().endswith('.docx') and not f.startswith('~')]
     
     for file_name in docx_files:
-        file_path = os.path.join(current_dir, file_name) # استخدام المسار الكامل لفتح الملف
+        file_path = os.path.join(current_dir, file_name)
         try:
             doc = Document(file_path)
             report_name = file_name.replace('.docx', '')
@@ -55,19 +58,17 @@ def process_server_files():
                         all_data['officials'].append(df)
         except Exception:
             continue
-    return all_data, docx_files
+            
+    return all_data, docx_files, all_files_in_dir, current_dir
 
-# 4. القائمة الجانبية
+# 3. القائمة الجانبية
 st.sidebar.markdown("## 🌐 قناة الشرق | تحليلات")
 st.sidebar.markdown("---")
 menu = st.sidebar.radio("القائمة الرئيسية:", ["🏠 الصفحة الرئيسية", "📊 لوحة الأداء العام", "📈 مقارنة التقارير الزمنية", "🗄️ قاعدة البيانات الخام"])
 
-st.sidebar.markdown("---")
-st.sidebar.success("🟢 متصل بالسيرفر الحي (Live Sync)")
-
 # معالجة البيانات
-with st.spinner("جاري جلب وقراءة البيانات من الخادم..."):
-    data, server_files = process_server_files()
+with st.spinner("جاري مسح السيرفر وقراءة البيانات..."):
+    data, server_files, all_files, active_dir = process_server_files()
 
 df_p = pd.concat(data['presentation']) if data['presentation'] else pd.DataFrame()
 df_c = pd.concat(data['category']) if data['category'] else pd.DataFrame()
@@ -76,36 +77,36 @@ df_g = pd.concat(data['guests']) if data['guests'] else pd.DataFrame()
 df_o = pd.concat(data['officials']) if data['officials'] else pd.DataFrame()
 
 # ==========================================
-# الصفحة الأولى: الرئيسية
+# الصفحة الأولى: الرئيسية + رادار الفحص
 # ==========================================
 if menu == "🏠 الصفحة الرئيسية":
     st.markdown('<div class="hero-banner"><h1>منصة تحليلات البث الإخباري</h1><p>لوحة تحكم حية تعرض بيانات الرصد الإخباري لقناة الشرق</p></div>', unsafe_allow_html=True)
-    st.markdown("### ✨ ميزات النظام")
-    c1, c2, c3 = st.columns(3)
-    c1.info("**📊 دمج ذكي للتقارير**\n\nتجميع البيانات من كل التقارير المرفوعة.")
-    c2.success("**📈 تحليل الاتجاهات**\n\nقارن فترات التغطية واكتشف الذروة.")
-    c3.warning("**🎙️ تقييم الأداء**\n\nتعرف على أكثر المراسلين والضيوف نشاطاً.")
-    st.markdown("---")
     
     if not server_files:
-        st.error("لم يتم العثور على تقارير. يرجى التأكد من رفع ملفات الوورد بصيغة (.docx) في نفس مكان ملف (app.py) في GitHub.")
+        st.error("لم يتم العثور على تقارير الوورد حتى الآن. يرجى الانتظار دقيقة وتحديث الصفحة، أو مراجعة رادار السيرفر بالأسفل.")
+        
+        # رادار السيرفر (يظهر فقط عند وجود مشكلة)
+        st.warning("🔍 **رادار فحص السيرفر (مخصص للمطورين):**")
+        st.write(f"**المسار الحالي الذي يبحث فيه الموقع:** `{active_dir}`")
+        st.write("**قائمة بكل الملفات التي يراها الموقع حالياً:**")
+        st.code(all_files)
+        st.info("إذا لم تكن ملفات (اليوم الأول، اليوم الثاني...) موجودة في القائمة أعلاه، فهذا يعني أن سيرفر Streamlit لم يقم بسحبها من GitHub بعد. انتظر دقيقتين وقم بعمل Reboot App مجدداً.")
+        
     else:
         st.success(f"✅ تم تحميل البيانات بنجاح! يوجد حالياً ({len(server_files)}) تقارير متصلة باللوحة (مثل: {server_files[0]}). تنقل بين الصفحات من القائمة الجانبية.")
 
 # ==========================================
-# الصفحة الثانية: لوحة الأداء العام
+# باقي الصفحات
 # ==========================================
 elif menu == "📊 لوحة الأداء العام":
     st.title("📊 لوحة الأداء الإجمالي")
-    if not server_files:
-        st.warning("لا توجد بيانات للعرض.")
+    if not server_files: st.warning("لا توجد بيانات للعرض.")
     else:
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("المواد الإخبارية", f"{int(df_p['العدد'].sum()) if not df_p.empty else 0:,}")
         col2.metric("حجم المراسلين", f"{len(df_r['المراسل/الصحفي'].unique()) if not df_r.empty else 0}")
         col3.metric("الضيوف والخبراء", f"{len(df_g) if not df_g.empty else 0}")
         col4.metric("تصريحات المسؤولين", f"{len(df_o) if not df_o.empty else 0}")
-        
         st.markdown("---")
         c1, c2 = st.columns(2)
         with c1:
@@ -122,13 +123,9 @@ elif menu == "📊 لوحة الأداء العام":
                 fig_c = px.pie(comb_c, values='العدد', names='التصنيف', hole=0.5, color_discrete_map={'سياسة': '#ef553b', 'اقتصاد': '#00cc96'})
                 st.plotly_chart(fig_c, use_container_width=True)
 
-# ==========================================
-# الصفحة الثالثة: مقارنة التقارير الزمنية
-# ==========================================
 elif menu == "📈 مقارنة التقارير الزمنية":
     st.title("📈 مقارنة الاتجاهات الزمنية والأداء")
-    if not server_files:
-        st.warning("لا توجد بيانات للعرض.")
+    if not server_files: st.warning("لا توجد بيانات للعرض.")
     else:
         tab1, tab2 = st.tabs(["👥 مقارنة تواجد الضيوف", "🏗️ مقارنة الإنتاج الخبري"])
         with tab1:
@@ -142,23 +139,13 @@ elif menu == "📈 مقارنة التقارير الزمنية":
                 fig_stacked.update_layout(plot_bgcolor='rgba(0,0,0,0)')
                 st.plotly_chart(fig_stacked, use_container_width=True)
 
-# ==========================================
-# الصفحة الرابعة: مستكشف البيانات
-# ==========================================
 elif menu == "🗄️ قاعدة البيانات الخام":
     st.title("🗄️ مستكشف البيانات")
-    if not server_files:
-        st.warning("لا توجد بيانات للعرض.")
+    if not server_files: st.warning("لا توجد بيانات للعرض.")
     else:
         reports_list = ["الكل"] + list(df_g['التقرير'].unique() if not df_g.empty else [])
         report_filter = st.selectbox("تصفية حسب التقرير:", reports_list)
-        
         if not df_g.empty:
             st.markdown("#### 🎙️ سجل الضيوف والخبراء")
             display_df = df_g if report_filter == "الكل" else df_g[df_g['التقرير'] == report_filter]
             st.dataframe(display_df, use_container_width=True)
-            
-        if not df_o.empty:
-            st.markdown("#### 👔 سجل تصريحات المسؤولين")
-            display_df_o = df_o if report_filter == "الكل" else df_o[df_o['التقرير'] == report_filter]
-            st.dataframe(display_df_o, use_container_width=True)
