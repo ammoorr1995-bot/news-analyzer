@@ -1,4 +1,3 @@
-import os
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -18,24 +17,15 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. دالة استخراج البيانات (محدثة بأقوى طريقة للبحث)
-def process_server_files():
+# 2. دالة استخراج البيانات (من الملفات المرفوعة يدوياً بشكل آمن)
+@st.cache_data
+def process_files(uploaded_files):
     all_data = {'presentation': [], 'category': [], 'reporters': [], 'guests': [], 'officials': []}
     
-    # استخدام المسار الأساسي لبيئة العمل (الأكثر أماناً في Streamlit)
-    current_dir = os.getcwd()
-    
-    # جلب قائمة بكل الملفات الموجودة في السيرفر (لأغراض الفحص)
-    all_files_in_dir = os.listdir(current_dir)
-    
-    # البحث بمرونة: تجاهل حالة الأحرف والتأكد من عدم وجود مسافات مخفية
-    docx_files = [f for f in all_files_in_dir if f.strip().lower().endswith('.docx') and not f.startswith('~')]
-    
-    for file_name in docx_files:
-        file_path = os.path.join(current_dir, file_name)
+    for file in uploaded_files:
         try:
-            doc = Document(file_path)
-            report_name = file_name.replace('.docx', '')
+            doc = Document(file)
+            report_name = file.name.replace('.docx', '') # يأخذ اسم الملف ليجعله تاريخاً
             for table in doc.tables:
                 rows = [[cell.text.strip() for cell in row.cells] for row in table.rows]
                 if len(rows) > 1:
@@ -59,93 +49,22 @@ def process_server_files():
         except Exception:
             continue
             
-    return all_data, docx_files, all_files_in_dir, current_dir
+    return all_data
 
-# 3. القائمة الجانبية
+# 3. القائمة الجانبية وصندوق الرفع الآمن
 st.sidebar.markdown("## 🌐 قناة الشرق | تحليلات")
 st.sidebar.markdown("---")
 menu = st.sidebar.radio("القائمة الرئيسية:", ["🏠 الصفحة الرئيسية", "📊 لوحة الأداء العام", "📈 مقارنة التقارير الزمنية", "🗄️ قاعدة البيانات الخام"])
 
-# معالجة البيانات
-with st.spinner("جاري مسح السيرفر وقراءة البيانات..."):
-    data, server_files, all_files, active_dir = process_server_files()
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 📥 إدخال البيانات")
+uploaded_files = st.sidebar.file_uploader("ارفع تقارير الوورد هنا:", type="docx", accept_multiple_files=True)
+st.sidebar.info("🔒 أمان البيانات: التقارير تُعالج لحظياً في متصفحك ولا تُحفظ على أي سيرفر خارجي.")
 
-df_p = pd.concat(data['presentation']) if data['presentation'] else pd.DataFrame()
-df_c = pd.concat(data['category']) if data['category'] else pd.DataFrame()
-df_r = pd.concat(data['reporters']) if data['reporters'] else pd.DataFrame()
-df_g = pd.concat(data['guests']) if data['guests'] else pd.DataFrame()
-df_o = pd.concat(data['officials']) if data['officials'] else pd.DataFrame()
-
-# ==========================================
-# الصفحة الأولى: الرئيسية + رادار الفحص
-# ==========================================
-if menu == "🏠 الصفحة الرئيسية":
-    st.markdown('<div class="hero-banner"><h1>منصة تحليلات البث الإخباري</h1><p>لوحة تحكم حية تعرض بيانات الرصد الإخباري لقناة الشرق</p></div>', unsafe_allow_html=True)
-    
-    if not server_files:
-        st.error("لم يتم العثور على تقارير الوورد حتى الآن. يرجى الانتظار دقيقة وتحديث الصفحة، أو مراجعة رادار السيرفر بالأسفل.")
-        
-        # رادار السيرفر (يظهر فقط عند وجود مشكلة)
-        st.warning("🔍 **رادار فحص السيرفر (مخصص للمطورين):**")
-        st.write(f"**المسار الحالي الذي يبحث فيه الموقع:** `{active_dir}`")
-        st.write("**قائمة بكل الملفات التي يراها الموقع حالياً:**")
-        st.code(all_files)
-        st.info("إذا لم تكن ملفات (اليوم الأول، اليوم الثاني...) موجودة في القائمة أعلاه، فهذا يعني أن سيرفر Streamlit لم يقم بسحبها من GitHub بعد. انتظر دقيقتين وقم بعمل Reboot App مجدداً.")
-        
-    else:
-        st.success(f"✅ تم تحميل البيانات بنجاح! يوجد حالياً ({len(server_files)}) تقارير متصلة باللوحة (مثل: {server_files[0]}). تنقل بين الصفحات من القائمة الجانبية.")
-
-# ==========================================
-# باقي الصفحات
-# ==========================================
-elif menu == "📊 لوحة الأداء العام":
-    st.title("📊 لوحة الأداء الإجمالي")
-    if not server_files: st.warning("لا توجد بيانات للعرض.")
-    else:
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("المواد الإخبارية", f"{int(df_p['العدد'].sum()) if not df_p.empty else 0:,}")
-        col2.metric("حجم المراسلين", f"{len(df_r['المراسل/الصحفي'].unique()) if not df_r.empty else 0}")
-        col3.metric("الضيوف والخبراء", f"{len(df_g) if not df_g.empty else 0}")
-        col4.metric("تصريحات المسؤولين", f"{len(df_o) if not df_o.empty else 0}")
-        st.markdown("---")
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown("#### 🎯 قوالب التغطية")
-            if not df_p.empty:
-                comb_p = df_p.groupby('شكل التقديم')['العدد'].sum().reset_index().sort_values(by='العدد', ascending=True)
-                fig_p = px.bar(comb_p, x='العدد', y='شكل التقديم', orientation='h', text='العدد', color='شكل التقديم', color_discrete_sequence=px.colors.qualitative.Pastel)
-                fig_p.update_layout(showlegend=False, plot_bgcolor='rgba(0,0,0,0)', xaxis_title="", yaxis_title="")
-                st.plotly_chart(fig_p, use_container_width=True)
-        with c2:
-            st.markdown("#### 🌍 التوزيع الموضوعي")
-            if not df_c.empty:
-                comb_c = df_c.groupby('التصنيف')['العدد'].sum().reset_index()
-                fig_c = px.pie(comb_c, values='العدد', names='التصنيف', hole=0.5, color_discrete_map={'سياسة': '#ef553b', 'اقتصاد': '#00cc96'})
-                st.plotly_chart(fig_c, use_container_width=True)
-
-elif menu == "📈 مقارنة التقارير الزمنية":
-    st.title("📈 مقارنة الاتجاهات الزمنية والأداء")
-    if not server_files: st.warning("لا توجد بيانات للعرض.")
-    else:
-        tab1, tab2 = st.tabs(["👥 مقارنة تواجد الضيوف", "🏗️ مقارنة الإنتاج الخبري"])
-        with tab1:
-            if not df_g.empty:
-                guest_trend = df_g.groupby('التقرير').size().reset_index(name='عدد الضيوف')
-                fig_trend = px.area(guest_trend, x='التقرير', y='عدد الضيوف', markers=True, color_discrete_sequence=['#1976d2'])
-                st.plotly_chart(fig_trend, use_container_width=True)
-        with tab2:
-            if not df_p.empty:
-                fig_stacked = px.bar(df_p, x='التقرير', y='العدد', color='شكل التقديم', text='العدد', barmode='stack')
-                fig_stacked.update_layout(plot_bgcolor='rgba(0,0,0,0)')
-                st.plotly_chart(fig_stacked, use_container_width=True)
-
-elif menu == "🗄️ قاعدة البيانات الخام":
-    st.title("🗄️ مستكشف البيانات")
-    if not server_files: st.warning("لا توجد بيانات للعرض.")
-    else:
-        reports_list = ["الكل"] + list(df_g['التقرير'].unique() if not df_g.empty else [])
-        report_filter = st.selectbox("تصفية حسب التقرير:", reports_list)
-        if not df_g.empty:
-            st.markdown("#### 🎙️ سجل الضيوف والخبراء")
-            display_df = df_g if report_filter == "الكل" else df_g[df_g['التقرير'] == report_filter]
-            st.dataframe(display_df, use_container_width=True)
+# معالجة البيانات فقط في حالة وجود ملفات مرفوعة
+df_p, df_c, df_r, df_g, df_o = pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+if uploaded_files:
+    with st.spinner("جاري التحليل واستخراج الرؤى..."):
+        data = process_files(uploaded_files)
+    df_p = pd.concat(data['presentation']) if data['presentation'] else pd.DataFrame()
+    df_c = pd.concat(data['category']) if data['category'] else pd.DataFrame()
