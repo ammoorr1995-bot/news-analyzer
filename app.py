@@ -1,22 +1,29 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 from docx import Document
 
-# 1. إعدادات الصفحة والتصميم
-st.set_page_config(page_title="Asharq News Master Analytics", layout="wide", page_icon="📈")
+# 1. إعدادات المنصة العالمية
+st.set_page_config(page_title="Asharq AI Analytics Pro", layout="wide", page_icon="💎")
 
+# تصميم CSS فاخر (Dark & Modern UI)
 st.markdown("""
     <style>
-    .stApp { background-color: #f1f5f9; }
-    .main-header { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: white; padding: 2rem; border-radius: 12px; text-align: center; margin-bottom: 2rem; }
-    .stMetric { background: white; padding: 1rem; border-radius: 10px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-top: 4px solid #3b82f6; }
+    .stApp { background-color: #0f172a; color: #f8fafc; }
+    [data-testid="stSidebar"] { background-color: #1e293b; border-right: 1px solid #334155; }
+    .metric-card { background: #1e293b; padding: 20px; border-radius: 15px; border: 1px solid #334155; text-align: center; transition: 0.3s; }
+    .metric-card:hover { border-color: #3b82f6; transform: translateY(-5px); }
+    .ai-insight { background: rgba(59, 130, 246, 0.1); border-right: 5px solid #3b82f6; padding: 15px; border-radius: 5px; margin: 10px 0; }
+    h1, h2, h3 { color: #f1f5f9; font-weight: 800; }
+    .stMetric label { color: #94a3b8 !important; }
+    .stMetric [data-testid="stMetricValue"] { color: #3b82f6 !important; font-size: 2rem; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. دالة المعالجة الذكية (مع معالجة الأخطاء)
+# 2. محرك معالجة البيانات الفائق
 @st.cache_data
-def load_all_data(uploaded_files):
+def ultra_data_engine(uploaded_files):
     storage = {'p': [], 'r': [], 'g': [], 'c': [], 'h': []}
     for file in uploaded_files:
         try:
@@ -26,9 +33,8 @@ def load_all_data(uploaded_files):
                 rows = [[cell.text.strip() for cell in row.cells] for row in table.rows]
                 if len(rows) > 1:
                     df = pd.DataFrame(rows[1:], columns=[c.strip() for c in rows[0]])
-                    df['الملف'] = fname # ربط كل معلومة باسم ملفها (تاريخها)
+                    df['Date_Ref'] = fname
                     cols = df.columns.tolist()
-                    
                     if 'شكل التقديم' in cols and 'العدد' in cols:
                         df['العدد'] = pd.to_numeric(df['العدد'].astype(str).str.replace(r'\D', '', regex=True), errors='coerce').fillna(0)
                         storage['p'].append(df)
@@ -39,72 +45,81 @@ def load_all_data(uploaded_files):
                     elif 'التصنيف' in cols and 'العدد' in cols:
                         df['العدد'] = pd.to_numeric(df['العدد'].astype(str).str.replace(r'\D', '', regex=True), errors='coerce').fillna(0)
                         storage['c'].append(df)
-                    elif 'الساعة' in cols and 'العدد' in cols:
-                        df['العدد'] = pd.to_numeric(df['العدد'], errors='coerce').fillna(0)
-                        storage['h'].append(df)
         except: continue
     return storage
 
-# 3. الواجهة
-st.markdown('<div class="main-header"><h1>مركز التحليل الإحصائي الزمني</h1><p>مراقبة وتحليل أداء المحتوى عبر جميع التقارير المرفوعة</p></div>', unsafe_allow_html=True)
+# 3. الواجهة الرئيسية (Hero Section)
+st.markdown("<h1 style='text-align: center; font-size: 3.5rem;'>💎 Asharq Analytics <span style='color:#3b82f6;'>Ultra</span></h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #94a3b8;'>الجيل القادم من تحليلات غرف الأخبار المدعومة بالبيانات</p>", unsafe_allow_html=True)
 
-files = st.sidebar.file_uploader("📥 ارفع كل ملفات التقارير هنا:", type="docx", accept_multiple_files=True)
+files = st.sidebar.file_uploader("📂 اسحب تقاريرك هنا (docx):", type="docx", accept_multiple_files=True)
 
 if files:
-    raw = load_all_data(files)
-    
-    # تحويل القوائم إلى جداول مجمعة مع تفادي أخطاء الفراغ
+    raw = ultra_data_engine(files)
     df_p = pd.concat(raw['p']) if raw['p'] else pd.DataFrame()
     df_r = pd.concat(raw['r']) if raw['r'] else pd.DataFrame()
     df_g = pd.concat(raw['g']) if raw['g'] else pd.DataFrame()
     df_c = pd.concat(raw['c']) if raw['c'] else pd.DataFrame()
-    df_h = pd.concat(raw['h']) if raw['h'] else pd.DataFrame()
 
-    tab1, tab2, tab3 = st.tabs(["📈 التحليل الزمني (شامل)", "🎙️ أداء الشبكة", "🔍 مستكشف الملفات"])
+    # --- القسم الأول: لوحة التحكم الذكية (Smart Cards) ---
+    st.markdown("### 🧠 استنتاجات الذكاء التحليلي")
+    c1, c2, c3 = st.columns(3)
+    
+    if not df_p.empty:
+        total_mats = int(df_p['العدد'].sum())
+        avg_mats = total_mats / len(files)
+        c1.metric("إجمالي المواد", f"{total_mats:,}", f"بمتوسط {avg_mats:.1f} لكل تقرير")
+        
+        # AI Insight 1: اكتشاف القالب المهيمن
+        top_format = df_p.groupby('شكل التقديم')['العدد'].sum().idxmax()
+        st.markdown(f"<div class='ai-insight'>💡 <b>ملاحظة ذكية:</b> المحتوى المهيمن هو '<b>{top_format}</b>'. هذا يشير إلى اعتماد التغطية على هذا القالب بنسبة كبيرة.</div>", unsafe_allow_html=True)
 
-    # --- التبويب الأول: التحليل الزمني الشامل لكل الملفات ---
-    with tab1:
-        st.markdown("### 📊 تطور حجم الإنتاج عبر التقارير المرفوعة")
+    if not df_r.empty:
+        total_reps = len(df_r['المراسل/الصحفي'].unique())
+        c2.metric("شبكة المراسلين", f"{total_reps}", "تغطية ميدانية نشطة")
+        
+    if not df_g.empty:
+        total_guests = len(df_g)
+        c3.metric("إجمالي الضيوف", f"{total_guests}", "تنوع في الآراء")
+
+    # --- القسم الثاني: الرادار التفاعلي ومقارنة الفئات ---
+    st.markdown("---")
+    col_left, col_right = st.columns([1, 1])
+
+    with col_left:
+        st.markdown("### 🕸️ رادار توازن المحتوى")
         if not df_p.empty:
-            # تجميع إجمالي المواد لكل ملف (يوم)
-            trend_data = df_p.groupby('الملف')['العدد'].sum().reset_index()
-            fig_trend = px.line(trend_data, x='الملف', y='العدد', markers=True, title="إجمالي المواد الإخبارية لكل يوم", line_shape="spline")
-            st.plotly_chart(fig_trend, use_container_width=True)
+            radar_data = df_p.groupby('شكل التقديم')['العدد'].sum().reset_index()
+            fig_radar = go.Figure(data=go.Scatterpolar(
+                r=radar_data['العدد'], theta=radar_data['شكل التقديم'], fill='toself',
+                line_color='#3b82f6', fillcolor='rgba(59, 130, 246, 0.3)'
+            ))
+            fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, gridcolor="#334155")), 
+                                    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color="#94a3b8")
+            st.plotly_chart(fig_radar, use_container_width=True)
 
-            st.markdown("### 🧬 مقارنة قوالب العرض (مكدسة)")
-            # عرض كيف يتغير توزيع (مذيع، ضيف، مراسل) عبر الأيام
-            fig_stack = px.bar(df_p, x='الملف', y='العدد', color='شكل التقديم', title="تغير نسب القوالب عبر الأيام")
-            st.plotly_chart(fig_stack, use_container_width=True)
-        
-        st.markdown("---")
-        st.markdown("### 🌍 توجه التغطية (سياسة vs اقتصاد)")
-        if not df_c.empty:
-            fig_topic = px.area(df_c.groupby(['الملف', 'التصنيف'])['العدد'].sum().reset_index(), 
-                                x='الملف', y='العدد', color='التصنيف', title="تطور الاهتمام الموضوعي")
-            st.plotly_chart(fig_topic, use_container_width=True)
+    with col_right:
+        st.markdown("### 📊 توزيع القوالب عبر الزمن")
+        if not df_p.empty:
+            fig_area = px.area(df_p.groupby(['Date_Ref', 'شكل التقديم'])['العدد'].sum().reset_index(), 
+                               x='Date_Ref', y='العدد', color='شكل التقديم', line_group='شكل التقديم')
+            fig_area.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color="#94a3b8")
+            st.plotly_chart(fig_area, use_container_width=True)
 
-    # --- التبويب الثاني: أداء الشبكة (مراسلين وضيووف) ---
-    with tab2:
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown("### 🎙️ أكثر المراسلين ظهوراً (إجمالي)")
-            if not df_r.empty:
-                top_r = df_r.groupby('المراسل/الصحفي')['عدد المداخلات'].sum().sort_values(ascending=False).head(15).reset_index()
-                st.plotly_chart(px.bar(top_r, x='عدد المداخلات', y='المراسل/الصحفي', orientation='h', color='عدد المداخلات'), use_container_width=True)
-        with col2:
-            st.markdown("### 👤 أكثر الضيوف استضافة")
-            if not df_g.empty:
-                top_g = df_g.groupby('الضيف').size().sort_values(ascending=False).head(15).reset_index(name='الظهور')
-                st.plotly_chart(px.bar(top_g, x='الظهور', y='الضيف', orientation='h', color_discrete_sequence=['#10b981']), use_container_width=True)
+    # --- القسم الثالث: خريطة الحرارة (Heatmap) لأداء المراسلين ---
+    st.markdown("---")
+    st.markdown("### 🔥 خريطة كثافة نشاط المراسلين")
+    if not df_r.empty:
+        pivot_r = df_r.pivot_table(index='المراسل/الصحفي', columns='Date_Ref', values='عدد المداخلات', aggfunc='sum').fillna(0)
+        fig_heat = px.imshow(pivot_r, labels=dict(x="التقرير", y="المراسل", color="المداخلات"),
+                             color_continuous_scale='Blues', aspect="auto")
+        st.plotly_chart(fig_heat, use_container_width=True)
 
-    # --- التبويب الثالث: مستكشف ملف محدد ---
-    with tab3:
-        st.markdown("### 🔎 تفاصيل ملف محدد")
-        fnames = [f.name.replace('.docx', '') for f in files]
-        selected = st.selectbox("اختر ملفاً لاستعراض بياناته الخام:", fnames)
-        
-        st.write(f"بيانات الضيوف في {selected}:")
-        if not df_g.empty:
-            st.dataframe(df_g[df_g['الملف'] == selected], use_container_width=True)
+    # --- القسم الرابع: الجدول الذكي التفاعلي ---
+    st.markdown("---")
+    st.markdown("### 🕵️‍♂️ مستكشف الضيوف العميق")
+    if not df_g.empty:
+        st.dataframe(df_g, use_container_width=True)
+
 else:
-    st.info("👈 يرجى رفع مجموعة من ملفات التقارير (docx) من القائمة الجانبية لبدء التحليل الزمني.")
+    st.info("💎 مرحباً بك في النسخة الاحترافية. يرجى رفع التقارير من القائمة الجانبية لتنشيط محرك الذكاء التحليلي.")
