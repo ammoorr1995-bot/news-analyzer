@@ -4,139 +4,107 @@ import plotly.express as px
 from docx import Document
 
 # 1. إعدادات الصفحة والتصميم
-st.set_page_config(page_title="Asharq News Insights", layout="wide", page_icon="📈")
+st.set_page_config(page_title="Asharq News Master Analytics", layout="wide", page_icon="📈")
 
 st.markdown("""
     <style>
-    .stApp { background-color: #f8fafc; }
-    .hero-section { background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: white; padding: 2.5rem; border-radius: 15px; text-align: center; margin-bottom: 2rem; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
-    .metric-card { background: white; padding: 1.5rem; border-radius: 12px; border-top: 5px solid #3b82f6; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); text-align: center; }
-    h3 { color: #1e3a8a; font-weight: 700; border-right: 5px solid #3b82f6; padding-right: 10px; margin-top: 30px; }
+    .stApp { background-color: #f1f5f9; }
+    .main-header { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: white; padding: 2rem; border-radius: 12px; text-align: center; margin-bottom: 2rem; }
+    .stMetric { background: white; padding: 1rem; border-radius: 10px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-top: 4px solid #3b82f6; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. دالة المعالجة الذكية
+# 2. دالة المعالجة الذكية (مع معالجة الأخطاء)
 @st.cache_data
-def load_and_process(uploaded_files):
-    all_data = {'presentation': [], 'category': [], 'reporters': [], 'guests': [], 'officials': [], 'hourly': []}
+def load_all_data(uploaded_files):
+    storage = {'p': [], 'r': [], 'g': [], 'c': [], 'h': []}
     for file in uploaded_files:
         try:
             doc = Document(file)
-            name = file.name.replace('.docx', '')
+            fname = file.name.replace('.docx', '')
             for table in doc.tables:
                 rows = [[cell.text.strip() for cell in row.cells] for row in table.rows]
                 if len(rows) > 1:
                     df = pd.DataFrame(rows[1:], columns=[c.strip() for c in rows[0]])
-                    df['التقرير'] = name
+                    df['الملف'] = fname # ربط كل معلومة باسم ملفها (تاريخها)
                     cols = df.columns.tolist()
+                    
                     if 'شكل التقديم' in cols and 'العدد' in cols:
                         df['العدد'] = pd.to_numeric(df['العدد'].astype(str).str.replace(r'\D', '', regex=True), errors='coerce').fillna(0)
-                        all_data['presentation'].append(df[['التقرير', 'شكل التقديم', 'العدد']])
-                    elif 'التصنيف' in cols and 'العدد' in cols and 'شكل التقديم' not in cols:
-                        df['العدد'] = pd.to_numeric(df['العدد'].astype(str).str.replace(r'\D', '', regex=True), errors='coerce').fillna(0)
-                        all_data['category'].append(df[['التقرير', 'التصنيف', 'العدد']])
+                        storage['p'].append(df)
                     elif 'المراسل/الصحفي' in cols and 'عدد المداخلات' in cols:
                         df['عدد المداخلات'] = pd.to_numeric(df['عدد المداخلات'], errors='coerce').fillna(0)
-                        all_data['reporters'].append(df[['التقرير', 'المراسل/الصحفي', 'عدد المداخلات']])
-                    elif 'الضيف' in cols and 'الصفة' in cols: all_data['guests'].append(df)
-                    elif 'المسؤول' in cols and 'الصفة' in cols: all_data['officials'].append(df)
+                        storage['r'].append(df)
+                    elif 'الضيف' in cols: storage['g'].append(df)
+                    elif 'التصنيف' in cols and 'العدد' in cols:
+                        df['العدد'] = pd.to_numeric(df['العدد'].astype(str).str.replace(r'\D', '', regex=True), errors='coerce').fillna(0)
+                        storage['c'].append(df)
                     elif 'الساعة' in cols and 'العدد' in cols:
                         df['العدد'] = pd.to_numeric(df['العدد'], errors='coerce').fillna(0)
-                        all_data['hourly'].append(df)
+                        storage['h'].append(df)
         except: continue
-    return all_data
+    return storage
 
-# 3. واجهة الاستخدام
-st.markdown('<div class="hero-section"><h1>منصة التحليل البصري والمقارنات</h1><p>تحويل تقارير الرصد اليومي إلى رؤى تفاعلية ذكية</p></div>', unsafe_allow_html=True)
+# 3. الواجهة
+st.markdown('<div class="main-header"><h1>مركز التحليل الإحصائي الزمني</h1><p>مراقبة وتحليل أداء المحتوى عبر جميع التقارير المرفوعة</p></div>', unsafe_allow_html=True)
 
-files = st.sidebar.file_uploader("📥 ارفع تقارير اليوم والأمس (docx):", type="docx", accept_multiple_files=True)
+files = st.sidebar.file_uploader("📥 ارفع كل ملفات التقارير هنا:", type="docx", accept_multiple_files=True)
 
 if files:
-    data = load_and_process(files)
-    names = [f.name.replace('.docx', '') for f in files]
+    raw = load_all_data(files)
     
-    t1, t2 = st.tabs(["📑 تقرير اليوم التفصيلي", "⚖️ المقارنة مع اليوم السابق"])
+    # تحويل القوائم إلى جداول مجمعة مع تفادي أخطاء الفراغ
+    df_p = pd.concat(raw['p']) if raw['p'] else pd.DataFrame()
+    df_r = pd.concat(raw['r']) if raw['r'] else pd.DataFrame()
+    df_g = pd.concat(raw['g']) if raw['g'] else pd.DataFrame()
+    df_c = pd.concat(raw['c']) if raw['c'] else pd.DataFrame()
+    df_h = pd.concat(raw['h']) if raw['h'] else pd.DataFrame()
 
-    # --- الجزء الأول: تحليل اليوم الحالي ---
-    with t1:
-        current = st.selectbox("اختر التقرير المراد تحليله:", names)
-        d_p = pd.concat(data['presentation']).query(f"التقرير == '{current}'") if data['presentation'] else pd.DataFrame()
-        d_c = pd.concat(data['category']).query(f"التقرير == '{current}'") if data['category'] else pd.DataFrame()
-        d_r = pd.concat(data['reporters']).query(f"التقرير == '{current}'") if data['reporters'] else pd.DataFrame()
-        d_g = pd.concat(data['guests']).query(f"التقرير == '{current}'") if data['guests'] else pd.DataFrame()
-        d_h = pd.concat(data['hourly']).query(f"التقرير == '{current}'") if data['hourly'] else pd.DataFrame()
+    tab1, tab2, tab3 = st.tabs(["📈 التحليل الزمني (شامل)", "🎙️ أداء الشبكة", "🔍 مستكشف الملفات"])
 
-        # بطاقات المؤشرات
-        st.markdown("### 🏷️ ملخص المؤشرات الرئيسية")
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("إجمالي المواد", f"{int(d_p['العدد'].sum()) if not d_p.empty else 0}")
-        c2.metric("المراسلين", f"{len(d_r['المراسل/الصحفي'].unique()) if not d_r.empty else 0}")
-        c3.metric("الضيوف", f"{len(d_g) if not d_g.empty else 0}")
-        c4.metric("التغطية", "24/7")
+    # --- التبويب الأول: التحليل الزمني الشامل لكل الملفات ---
+    with tab1:
+        st.markdown("### 📊 تطور حجم الإنتاج عبر التقارير المرفوعة")
+        if not df_p.empty:
+            # تجميع إجمالي المواد لكل ملف (يوم)
+            trend_data = df_p.groupby('الملف')['العدد'].sum().reset_index()
+            fig_trend = px.line(trend_data, x='الملف', y='العدد', markers=True, title="إجمالي المواد الإخبارية لكل يوم", line_shape="spline")
+            st.plotly_chart(fig_trend, use_container_width=True)
 
+            st.markdown("### 🧬 مقارنة قوالب العرض (مكدسة)")
+            # عرض كيف يتغير توزيع (مذيع، ضيف، مراسل) عبر الأيام
+            fig_stack = px.bar(df_p, x='الملف', y='العدد', color='شكل التقديم', title="تغير نسب القوالب عبر الأيام")
+            st.plotly_chart(fig_stack, use_container_width=True)
+        
+        st.markdown("---")
+        st.markdown("### 🌍 توجه التغطية (سياسة vs اقتصاد)")
+        if not df_c.empty:
+            fig_topic = px.area(df_c.groupby(['الملف', 'التصنيف'])['العدد'].sum().reset_index(), 
+                                x='الملف', y='العدد', color='التصنيف', title="تطور الاهتمام الموضوعي")
+            st.plotly_chart(fig_topic, use_container_width=True)
+
+    # --- التبويب الثاني: أداء الشبكة (مراسلين وضيووف) ---
+    with tab2:
         col1, col2 = st.columns(2)
         with col1:
-            st.markdown("### 🍩 توزيع قوالب العرض")
-            if not d_p.empty:
-                st.plotly_chart(px.pie(d_p, values='العدد', names='شكل التقديم', hole=0.5), use_container_width=True)
+            st.markdown("### 🎙️ أكثر المراسلين ظهوراً (إجمالي)")
+            if not df_r.empty:
+                top_r = df_r.groupby('المراسل/الصحفي')['عدد المداخلات'].sum().sort_values(ascending=False).head(15).reset_index()
+                st.plotly_chart(px.bar(top_r, x='عدد المداخلات', y='المراسل/الصحفي', orientation='h', color='عدد المداخلات'), use_container_width=True)
         with col2:
-            st.markdown("### 🌍 السياسة مقابل الاقتصاد")
-            if not d_c.empty:
-                st.plotly_chart(px.pie(d_c, values='العدد', names='التصنيف', hole=0.5, color_discrete_map={'سياسة':'#1e3a8a','اقتصاد':'#10b981'}), use_container_width=True)
+            st.markdown("### 👤 أكثر الضيوف استضافة")
+            if not df_g.empty:
+                top_g = df_g.groupby('الضيف').size().sort_values(ascending=False).head(15).reset_index(name='الظهور')
+                st.plotly_chart(px.bar(top_g, x='الظهور', y='الضيف', orientation='h', color_discrete_sequence=['#10b981']), use_container_width=True)
 
-        if not d_h.empty:
-            st.markdown("### 📊 كثافة المواد حسب ساعات البث")
-            fig_h = px.bar(d_h, x='الساعة', y='العدد', color='التصنيف' if 'التصنيف' in d_h.columns else None, barmode='group')
-            st.plotly_chart(fig_h, use_container_width=True)
-
-        col3, col4 = st.columns(2)
-        with col3:
-            st.markdown("### 🎙️ ترتيب المراسلين بنشاطهم")
-            if not d_r.empty:
-                st.plotly_chart(px.bar(d_r.sort_values('عدد المداخلات'), x='عدد المداخلات', y='المراسل/الصحفي', orientation='h'), use_container_width=True)
-        with col4:
-            st.markdown("### 👤 أبرز الضيوف ظهوراً")
-            if not d_g.empty:
-                top_g = d_g['الضيف'].value_counts().reset_index().head(10)
-                st.plotly_chart(px.bar(top_g, x='count', y='الضيف', orientation='h', color_discrete_sequence=['#10b981']), use_container_width=True)
-
-    # --- الجزء الثاني: المقارنة الذكية ---
-    with t2:
-        if len(names) < 2:
-            st.warning("⚠️ يرجى رفع ملفين على الأقل لتفعيل خاصية المقارنة.")
-        else:
-            c_today, c_yest = st.columns(2)
-            today = c_today.selectbox("تقرير (اليوم):", names, index=0)
-            yest = c_yest.selectbox("تقرير (الأمس):", names, index=1)
-
-            # حساب فروقات الأرقام
-            t_total = pd.concat(data['presentation']).query(f"التقرير == '{today}'")['العدد'].sum()
-            y_total = pd.concat(data['presentation']).query(f"التقرير == '{yest}'")['العدد'].sum()
-            diff = t_total - y_total
-            perc = (diff / y_total * 100) if y_total != 0 else 0
-
-            st.markdown("### ⚖️ جدول المقارنة الرقمي")
-            m1, m2 = st.columns(2)
-            m1.metric("إجمالي المواد", f"{int(t_total)}", f"{perc:.1f}% {'▲' if diff > 0 else '▼'}")
-            
-            # رسم مقارنة الأعمدة (أمس vs اليوم)
-            st.markdown("### 📊 مقارنة قوالب التقديم (أمس vs اليوم)")
-            comp_p = pd.concat(data['presentation']).query(f"التقرير in ['{today}', '{yest}']")
-            st.plotly_chart(px.bar(comp_p, x='شكل التقديم', y='العدد', color='التقرير', barmode='group'), use_container_width=True)
-
-            # مقارنة الساعات (رسم خطي)
-            st.markdown("### 📉 التغير في كثافة الساعات (خط زمني)")
-            comp_h = pd.concat(data['hourly']).query(f"التقرير in ['{today}', '{yest}']")
-            if not comp_h.empty:
-                st.plotly_chart(px.line(comp_h, x='الساعة', y='العدد', color='التقرير', markers=True), use_container_width=True)
-
-            st.markdown("### 🎙️ تحليل نشاط المراسلين (المقارن)")
-            df_r_all = pd.concat(data['reporters'])
-            r_today = df_r_all.query(f"التقرير == '{today}'").groupby('المراسل/الصحفي')['عدد المداخلات'].sum()
-            r_yest = df_r_all.query(f"التقرير == '{yest}'").groupby('المراسل/الصحفي')['عدد المداخلات'].sum()
-            r_comp = pd.concat([r_today, r_yest], axis=1, keys=['اليوم', 'الأمس']).fillna(0)
-            r_comp['الفرق'] = r_comp['اليوم'] - r_comp['الأمس']
-            st.table(r_comp.sort_values('الفرق', ascending=False))
-
+    # --- التبويب الثالث: مستكشف ملف محدد ---
+    with tab3:
+        st.markdown("### 🔎 تفاصيل ملف محدد")
+        fnames = [f.name.replace('.docx', '') for f in files]
+        selected = st.selectbox("اختر ملفاً لاستعراض بياناته الخام:", fnames)
+        
+        st.write(f"بيانات الضيوف في {selected}:")
+        if not df_g.empty:
+            st.dataframe(df_g[df_g['الملف'] == selected], use_container_width=True)
 else:
-    st.info("👈 ابدأ برفع ملفات الرصد اليومي من القائمة الجانبية.")
+    st.info("👈 يرجى رفع مجموعة من ملفات التقارير (docx) من القائمة الجانبية لبدء التحليل الزمني.")
